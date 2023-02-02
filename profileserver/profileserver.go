@@ -119,7 +119,7 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 		return nil, errInternal
 	}
 
-	// can call [0] car result has only one field
+	// can call [0] because result has only one field
 	picture, _ := result[0].Value.(primitive.Binary)
 	return &pb.Picture{UserId: request.Id, Data: picture.Data}, nil
 }
