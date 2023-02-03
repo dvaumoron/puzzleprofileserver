@@ -172,7 +172,7 @@ func convertToProfiles(profiles []bson.M) []*pb.UserProfile {
 		info, _ := profile[infoKey].(bson.M)
 		resInfo := map[string]string{}
 		for k, v := range info {
-			info[k], _ = v.(string)
+			resInfo[k], _ = v.(string)
 		}
 		resProfiles = append(resProfiles, &pb.UserProfile{
 			UserId: mongoclient.ExtractUint64(profile[userIdKey]), Desc: desc, Info: resInfo,
