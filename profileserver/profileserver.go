@@ -145,7 +145,7 @@ func (s server) ListProfiles(ctx context.Context, request *pb.UserIds) (*pb.User
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
-	return &pb.UserProfiles{List: convertToProfiles(results)}, nil
+	return &pb.UserProfiles{List: mongoclient.ConvertSlice(results, convertToProfile)}, nil
 }
 
 func (s server) Delete(ctx context.Context, request *pb.UserId) (*pb.Response, error) {
@@ -165,18 +165,10 @@ func (s server) Delete(ctx context.Context, request *pb.UserId) (*pb.Response, e
 	return &pb.Response{Success: true}, nil
 }
 
-func convertToProfiles(profiles []bson.M) []*pb.UserProfile {
-	resProfiles := make([]*pb.UserProfile, 0, len(profiles))
-	for _, profile := range profiles {
-		desc, _ := profile[descKey].(string)
-		info, _ := profile[infoKey].(bson.M)
-		resInfo := map[string]string{}
-		for k, v := range info {
-			resInfo[k], _ = v.(string)
-		}
-		resProfiles = append(resProfiles, &pb.UserProfile{
-			UserId: mongoclient.ExtractUint64(profile[userIdKey]), Desc: desc, Info: resInfo,
-		})
+func convertToProfile(profile bson.M) *pb.UserProfile {
+	desc, _ := profile[descKey].(string)
+	return &pb.UserProfile{
+		UserId: mongoclient.ExtractUint64(profile[userIdKey]), Desc: desc,
+		Info: mongoclient.ExtractStringMap(profile[infoKey]),
 	}
-	return resProfiles
 }

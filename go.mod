@@ -3,7 +3,7 @@ module github.com/dvaumoron/puzzleprofileserver
 go 1.19
 
 require (
-	github.com/dvaumoron/puzzlemongoclient v1.1.0
+	github.com/dvaumoron/puzzlemongoclient v1.2.0
 	github.com/dvaumoron/puzzleprofileservice v1.2.0
 	github.com/joho/godotenv v1.4.0
 	go.mongodb.org/mongo-driver v1.11.1
