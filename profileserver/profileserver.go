@@ -119,7 +119,7 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 		return nil, errInternal
 	}
 
-	// can call [0] because result has only one field
+	// can call [0] to get picture because result has only one field
 	picture := mongoclient.ExtractBinary(result[0].Value)
 	return &pb.Picture{UserId: request.Id, Data: picture}, nil
 }
