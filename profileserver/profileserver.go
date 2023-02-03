@@ -22,16 +22,16 @@ import (
 	"errors"
 	"log"
 
+	mongoclient "github.com/dvaumoron/puzzlemongoclient"
 	pb "github.com/dvaumoron/puzzleprofileservice"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const collectionName = "profiles"
 
-const idKey = "userId"
+const userIdKey = "userId"
 const descKey = "desc"
 const infoKey = "info"
 const pictureKey = "pictureData"
@@ -61,17 +61,17 @@ func (s server) UpdateProfile(ctx context.Context, request *pb.UserProfile) (*pb
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
-	defer disconnect(client, ctx)
+	defer mongoclient.Disconnect(client, ctx)
 
 	id := request.UserId
 	info := bson.M{}
 	for k, v := range request.Info {
 		info[k] = v
 	}
-	profile := bson.M{idKey: id, descKey: request.Desc, infoKey: info}
+	profile := bson.M{userIdKey: id, descKey: request.Desc, infoKey: info}
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	_, err = collection.UpdateOne(
-		ctx, bson.D{{Key: idKey, Value: id}}, profile, optsCreateUnexisting,
+		ctx, bson.D{{Key: userIdKey, Value: id}}, profile, optsCreateUnexisting,
 	)
 	if err != nil {
 		log.Println(mongoCallMsg, err)
@@ -86,13 +86,13 @@ func (s server) UpdatePicture(ctx context.Context, request *pb.Picture) (*pb.Res
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
-	defer disconnect(client, ctx)
+	defer mongoclient.Disconnect(client, ctx)
 
 	id := request.UserId
-	profile := bson.M{idKey: id, pictureKey: request.Data}
+	profile := bson.M{userIdKey: id, pictureKey: request.Data}
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	_, err = collection.UpdateOne(
-		ctx, bson.D{{Key: idKey, Value: id}}, profile, optsCreateUnexisting,
+		ctx, bson.D{{Key: userIdKey, Value: id}}, profile, optsCreateUnexisting,
 	)
 	if err != nil {
 		log.Println(mongoCallMsg, err)
@@ -107,12 +107,12 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
-	defer disconnect(client, ctx)
+	defer mongoclient.Disconnect(client, ctx)
 
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	var result bson.D
 	err = collection.FindOne(
-		ctx, bson.D{{Key: idKey, Value: request.Id}}, optsOnlyPictureField,
+		ctx, bson.D{{Key: userIdKey, Value: request.Id}}, optsOnlyPictureField,
 	).Decode(&result)
 	if err != nil {
 		log.Println(mongoCallMsg, err)
@@ -120,8 +120,8 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 	}
 
 	// can call [0] because result has only one field
-	picture, _ := result[0].Value.(primitive.Binary)
-	return &pb.Picture{UserId: request.Id, Data: picture.Data}, nil
+	picture := mongoclient.ExtractBinary(result[0].Value)
+	return &pb.Picture{UserId: request.Id, Data: picture}, nil
 }
 
 func (s server) ListProfiles(ctx context.Context, request *pb.UserIds) (*pb.UserProfiles, error) {
@@ -130,10 +130,11 @@ func (s server) ListProfiles(ctx context.Context, request *pb.UserIds) (*pb.User
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
-	defer disconnect(client, ctx)
+	defer mongoclient.Disconnect(client, ctx)
 
 	collection := client.Database(s.databaseName).Collection(collectionName)
-	cursor, err := collection.Find(ctx, idsFilter(request.Ids), optsExcludePictureField)
+	filter := bson.D{{Key: userIdKey, Value: bson.D{{Key: "$in", Value: request.Ids}}}}
+	cursor, err := collection.Find(ctx, filter, optsExcludePictureField)
 	if err != nil {
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
@@ -153,29 +154,15 @@ func (s server) Delete(ctx context.Context, request *pb.UserId) (*pb.Response, e
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
-	defer disconnect(client, ctx)
+	defer mongoclient.Disconnect(client, ctx)
 
 	collection := client.Database(s.databaseName).Collection(collectionName)
-	_, err = collection.DeleteMany(ctx, bson.D{{Key: idKey, Value: request.Id}})
+	_, err = collection.DeleteMany(ctx, bson.D{{Key: userIdKey, Value: request.Id}})
 	if err != nil {
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
 	return &pb.Response{Success: true}, nil
-}
-
-func disconnect(client *mongo.Client, ctx context.Context) {
-	if err := client.Disconnect(ctx); err != nil {
-		log.Print("Error during MongoDB disconnect :", err)
-	}
-}
-
-func idsFilter(ids []uint64) bson.D {
-	filter := make(bson.A, 0, len(ids))
-	for _, id := range ids {
-		filter = append(filter, id)
-	}
-	return bson.D{{Key: idKey, Value: bson.D{{Key: "$in", Value: filter}}}}
 }
 
 func convertToProfiles(profiles []bson.M) []*pb.UserProfile {
@@ -185,22 +172,11 @@ func convertToProfiles(profiles []bson.M) []*pb.UserProfile {
 		info, _ := profile[infoKey].(bson.M)
 		resInfo := map[string]string{}
 		for k, v := range info {
-			str, _ := v.(string)
-			info[k] = str
+			info[k], _ = v.(string)
 		}
 		resProfiles = append(resProfiles, &pb.UserProfile{
-			UserId: extractUint64(profile[idKey]), Desc: desc, Info: resInfo,
+			UserId: mongoclient.ExtractUint64(profile[userIdKey]), Desc: desc, Info: resInfo,
 		})
 	}
 	return resProfiles
-}
-
-func extractUint64(v any) uint64 {
-	switch casted := v.(type) {
-	case int32:
-		return uint64(casted)
-	case int64:
-		return uint64(casted)
-	}
-	return 0
 }
