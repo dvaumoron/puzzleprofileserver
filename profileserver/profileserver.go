@@ -31,6 +31,8 @@ import (
 
 const collectionName = "profiles"
 
+const setOperator = "$set"
+
 const userIdKey = "userId"
 const descKey = "desc"
 const infoKey = "info"
@@ -68,7 +70,7 @@ func (s server) UpdateProfile(ctx context.Context, request *pb.UserProfile) (*pb
 	for k, v := range request.Info {
 		info[k] = v
 	}
-	profile := bson.M{userIdKey: id, descKey: request.Desc, infoKey: info}
+	profile := bson.D{{Key: setOperator, Value: bson.M{userIdKey: id, descKey: request.Desc, infoKey: info}}}
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	_, err = collection.UpdateOne(
 		ctx, bson.D{{Key: userIdKey, Value: id}}, profile, optsCreateUnexisting,
@@ -89,7 +91,7 @@ func (s server) UpdatePicture(ctx context.Context, request *pb.Picture) (*pb.Res
 	defer mongoclient.Disconnect(client, ctx)
 
 	id := request.UserId
-	profile := bson.M{userIdKey: id, pictureKey: request.Data}
+	profile := bson.D{{Key: setOperator, Value: bson.M{userIdKey: id, pictureKey: request.Data}}}
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	_, err = collection.UpdateOne(
 		ctx, bson.D{{Key: userIdKey, Value: id}}, profile, optsCreateUnexisting,
