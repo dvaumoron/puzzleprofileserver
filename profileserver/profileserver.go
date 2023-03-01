@@ -41,6 +41,7 @@ const pictureKey = "pictureData"
 const mongoCallMsg = "Failed during MongoDB call :"
 
 var errInternal = errors.New("internal service error")
+var errPictureNotFound = errors.New("picture not found")
 
 var optsCreateUnexisting = options.Update().SetUpsert(true)
 var optsExcludePictureField = options.Find().SetProjection(bson.D{{Key: pictureKey, Value: false}})
@@ -117,12 +118,19 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 		ctx, bson.D{{Key: userIdKey, Value: request.Id}}, optsOnlyPictureField,
 	).Decode(&result)
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errPictureNotFound
+		}
+
 		log.Println(mongoCallMsg, err)
 		return nil, errInternal
 	}
 
 	// call [1] to get picture because result has only the id and one field
 	picture := mongoclient.ExtractBinary(result[1].Value)
+	if len(picture) == 0 {
+		return nil, errPictureNotFound
+	}
 	return &pb.Picture{UserId: request.Id, Data: picture}, nil
 }
 
