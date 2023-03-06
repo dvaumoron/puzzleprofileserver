@@ -135,6 +135,11 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 }
 
 func (s server) ListProfiles(ctx context.Context, request *pb.UserIds) (*pb.UserProfiles, error) {
+	ids := request.Ids
+	if len(ids) == 0 {
+		return &pb.UserProfiles{}, nil
+	}
+
 	client, err := mongo.Connect(ctx, s.clientOptions)
 	if err != nil {
 		log.Println(mongoCallMsg, err)
@@ -143,7 +148,7 @@ func (s server) ListProfiles(ctx context.Context, request *pb.UserIds) (*pb.User
 	defer mongoclient.Disconnect(client, ctx)
 
 	collection := client.Database(s.databaseName).Collection(collectionName)
-	filter := bson.D{{Key: userIdKey, Value: bson.D{{Key: "$in", Value: request.Ids}}}}
+	filter := bson.D{{Key: userIdKey, Value: bson.D{{Key: "$in", Value: ids}}}}
 	cursor, err := collection.Find(ctx, filter, optsExcludePictureField)
 	if err != nil {
 		log.Println(mongoCallMsg, err)
