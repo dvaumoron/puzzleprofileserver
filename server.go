@@ -25,7 +25,8 @@ import (
 )
 
 func main() {
-	s := grpcserver.New()
-	pb.RegisterProfileServer(s, profileserver.New(mongoclient.Create()))
+	s := grpcserver.Make()
+	clientOptions, databaseName := mongoclient.Create()
+	pb.RegisterProfileServer(s, profileserver.New(clientOptions, databaseName, s.Logger))
 	s.Start()
 }
