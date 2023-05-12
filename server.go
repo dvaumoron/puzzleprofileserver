@@ -30,7 +30,7 @@ import (
 var version string
 
 func main() {
-	s := grpcserver.Make("", version)
+	s := grpcserver.Make(profileserver.ProfileKey, version)
 	clientOptions, databaseName := mongoclient.Create()
 	pb.RegisterProfileServer(s, profileserver.New(clientOptions, databaseName, s.Logger))
 	s.Start()
