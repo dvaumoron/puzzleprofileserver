@@ -18,14 +18,19 @@
 package main
 
 import (
+	_ "embed"
+
 	grpcserver "github.com/dvaumoron/puzzlegrpcserver"
 	mongoclient "github.com/dvaumoron/puzzlemongoclient"
 	"github.com/dvaumoron/puzzleprofileserver/profileserver"
 	pb "github.com/dvaumoron/puzzleprofileservice"
 )
 
+//go:embed version.txt
+var version string
+
 func main() {
-	s := grpcserver.Make()
+	s := grpcserver.Make("", version)
 	clientOptions, databaseName := mongoclient.Create()
 	pb.RegisterProfileServer(s, profileserver.New(clientOptions, databaseName, s.Logger))
 	s.Start()

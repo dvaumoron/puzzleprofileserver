@@ -23,11 +23,14 @@ import (
 
 	mongoclient "github.com/dvaumoron/puzzlemongoclient"
 	pb "github.com/dvaumoron/puzzleprofileservice"
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 )
+
+const ProfileKey = "puzzleProfile"
 
 const collectionName = "profiles"
 
@@ -52,20 +55,21 @@ type server struct {
 	pb.UnimplementedProfileServer
 	clientOptions *options.ClientOptions
 	databaseName  string
-	logger        *zap.Logger
+	logger        *otelzap.Logger
 }
 
-func New(clientOptions *options.ClientOptions, databaseName string, logger *zap.Logger) pb.ProfileServer {
+func New(clientOptions *options.ClientOptions, databaseName string, logger *otelzap.Logger) pb.ProfileServer {
 	return server{clientOptions: clientOptions, databaseName: databaseName, logger: logger}
 }
 
 func (s server) UpdateProfile(ctx context.Context, request *pb.UserProfile) (*pb.Response, error) {
+	logger := s.logger.Ctx(ctx)
 	client, err := mongo.Connect(ctx, s.clientOptions)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
-	defer mongoclient.Disconnect(client, s.logger, ctx)
+	defer mongoclient.Disconnect(client, logger)
 
 	id := request.UserId
 	info := bson.M{}
@@ -78,19 +82,20 @@ func (s server) UpdateProfile(ctx context.Context, request *pb.UserProfile) (*pb
 		ctx, bson.D{{Key: userIdKey, Value: id}}, profile, optsCreateUnexisting,
 	)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 	return &pb.Response{Success: true}, nil
 }
 
 func (s server) UpdatePicture(ctx context.Context, request *pb.Picture) (*pb.Response, error) {
+	logger := s.logger.Ctx(ctx)
 	client, err := mongo.Connect(ctx, s.clientOptions)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
-	defer mongoclient.Disconnect(client, s.logger, ctx)
+	defer mongoclient.Disconnect(client, logger)
 
 	id := request.UserId
 	profile := bson.D{{Key: setOperator, Value: bson.M{userIdKey: id, pictureKey: request.Data}}}
@@ -99,19 +104,20 @@ func (s server) UpdatePicture(ctx context.Context, request *pb.Picture) (*pb.Res
 		ctx, bson.D{{Key: userIdKey, Value: id}}, profile, optsCreateUnexisting,
 	)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 	return &pb.Response{Success: true}, nil
 }
 
 func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture, error) {
+	logger := s.logger.Ctx(ctx)
 	client, err := mongo.Connect(ctx, s.clientOptions)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
-	defer mongoclient.Disconnect(client, s.logger, ctx)
+	defer mongoclient.Disconnect(client, logger)
 
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	var result bson.D
@@ -123,7 +129,7 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 			return nil, errPictureNotFound
 		}
 
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 
@@ -136,6 +142,7 @@ func (s server) GetPicture(ctx context.Context, request *pb.UserId) (*pb.Picture
 }
 
 func (s server) ListProfiles(ctx context.Context, request *pb.UserIds) (*pb.UserProfiles, error) {
+	logger := s.logger.Ctx(ctx)
 	ids := request.Ids
 	if len(ids) == 0 {
 		return &pb.UserProfiles{}, nil
@@ -143,39 +150,40 @@ func (s server) ListProfiles(ctx context.Context, request *pb.UserIds) (*pb.User
 
 	client, err := mongo.Connect(ctx, s.clientOptions)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
-	defer mongoclient.Disconnect(client, s.logger, ctx)
+	defer mongoclient.Disconnect(client, logger)
 
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	filter := bson.D{{Key: userIdKey, Value: bson.D{{Key: "$in", Value: ids}}}}
 	cursor, err := collection.Find(ctx, filter, optsExcludePictureField)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 
 	var results []bson.M
 	if err = cursor.All(ctx, &results); err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 	return &pb.UserProfiles{List: mongoclient.ConvertSlice(results, convertToProfile)}, nil
 }
 
 func (s server) Delete(ctx context.Context, request *pb.UserId) (*pb.Response, error) {
+	logger := s.logger.Ctx(ctx)
 	client, err := mongo.Connect(ctx, s.clientOptions)
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
-	defer mongoclient.Disconnect(client, s.logger, ctx)
+	defer mongoclient.Disconnect(client, logger)
 
 	collection := client.Database(s.databaseName).Collection(collectionName)
 	_, err = collection.DeleteMany(ctx, bson.D{{Key: userIdKey, Value: request.Id}})
 	if err != nil {
-		s.logger.Error(mongoCallMsg, zap.Error(err))
+		logger.Error(mongoCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 	return &pb.Response{Success: true}, nil
